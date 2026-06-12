@@ -1,0 +1,63 @@
+<!-- UR5e kinematics MJCF - self-contained, capsule/box geometry, no external mesh dependencies.
+     DH parameters (standard DH / MDH):
+       a     = [0, -0.425, -0.3922, 0, 0, 0]  m
+       d     = [0.1625, 0, 0, 0.1333, 0.0997, 0.0996]  m
+       alpha = [pi/2, 0, 0, pi/2, -pi/2, 0]  rad
+     Joint ranges from UR5e specification.
+     This file is included (via <include>) into wheeled_ur5e.xml.
+     It does NOT define actuators; those are in the top-level file.
+-->
+<mujocoinclude>
+  <!-- UR5e shoulder mounted at origin of base_yaw_body, offset by shoulder mount height -->
+  <body name="shoulder_link" pos="0 0 0.27">
+    <joint name="shoulder_pan_joint" type="hinge" axis="0 0 1"
+           range="-6.2832 6.2832" damping="1.0" armature="0.1"/>
+    <geom type="cylinder" size="0.06 0.06" rgba="0.3 0.3 0.8 1" mass="3.761"/>
+    <geom type="capsule" fromto="0 0 0 0 0 0.04" size="0.055" rgba="0.3 0.3 0.8 1" mass="0"/>
+    <!-- visual connector: shoulder origin to upper_arm origin (y offset 0.1358) -->
+    <geom type="capsule" fromto="0 0 0 0 0.1358 0" size="0.05" rgba="0.3 0.3 0.8 1" mass="0"/>
+
+    <body name="upper_arm_link" pos="0 0.1358 0">
+      <!-- shoulder lift: rotate around y axis in local frame -->
+      <joint name="shoulder_lift_joint" type="hinge" axis="0 1 0"
+             range="-6.2832 6.2832" damping="1.0" armature="0.1"/>
+      <geom type="capsule" fromto="0 0 0 -0.425 0 0" size="0.04" rgba="0.3 0.5 0.8 1" mass="8.058"/>
+
+      <body name="forearm_link" pos="-0.425 0 0">
+        <!-- elbow: rotate around y axis -->
+        <joint name="elbow_joint" type="hinge" axis="0 1 0"
+               range="-3.1416 3.1416" damping="0.5" armature="0.1"/>
+        <geom type="capsule" fromto="0 0 0 -0.3922 0 0" size="0.035" rgba="0.3 0.6 0.7 1" mass="2.846"/>
+        <!-- visual connector: forearm end up to wrist_1 origin (z offset 0.1333) -->
+        <geom type="capsule" fromto="-0.3922 0 0 -0.3922 0 0.1333" size="0.033" rgba="0.3 0.6 0.7 1" mass="0"/>
+
+        <body name="wrist_1_link" pos="-0.3922 0 0.1333">
+          <!-- wrist 1: rotate around y axis -->
+          <joint name="wrist_1_joint" type="hinge" axis="0 1 0"
+                 range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+          <geom type="cylinder" size="0.032 0.035" rgba="0.5 0.5 0.5 1" mass="1.37"/>
+          <!-- visual connector: wrist_1 origin to wrist_2 origin (y offset -0.0997) -->
+          <geom type="capsule" fromto="0 0 0 0 -0.0997 0" size="0.031" rgba="0.5 0.5 0.5 1" mass="0"/>
+
+          <body name="wrist_2_link" pos="0 -0.0997 0">
+            <!-- wrist 2: rotate around z axis -->
+            <joint name="wrist_2_joint" type="hinge" axis="0 0 1"
+                   range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+            <geom type="cylinder" size="0.032 0.035" rgba="0.5 0.5 0.5 1" mass="1.37"/>
+            <!-- visual connector: wrist_2 origin to wrist_3 origin (z offset 0.0996) -->
+            <geom type="capsule" fromto="0 0 0 0 0 0.0996" size="0.031" rgba="0.5 0.5 0.5 1" mass="0"/>
+
+            <body name="wrist_3_link" pos="0 0 0.0996">
+              <!-- wrist 3: rotate around y axis -->
+              <joint name="wrist_3_joint" type="hinge" axis="0 1 0"
+                     range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+              <geom type="cylinder" size="0.03 0.02" rgba="0.6 0.6 0.6 1" mass="0.195"/>
+              <!-- ee_site: end-effector at flange (0.0996 m beyond wrist_3 center along z) -->
+              <site name="ee_site" pos="0 -0.0996 0" size="0.015" rgba="1 0 0 1" type="sphere"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </body>
+</mujocoinclude>

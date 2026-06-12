@@ -1,0 +1,137 @@
+<!-- Wheeled UR5e: 4-DoF virtual mobile base + UR5e 6-DoF arm = 10-DoF system.
+     Base DOFs: base_x (slide), base_y (slide), base_z (slide), base_yaw (hinge).
+     Arm: shoulder_pan, shoulder_lift, elbow, wrist_1, wrist_2, wrist_3.
+     Actuators: 10 position actuators, one per DOF.
+     ee_site: defined in ur5e_kinematics.xml at tool flange.
+     target_body: mocap body for visualizing reference end-effector position.
+-->
+<mujoco model="wheeled_ur5e">
+  <compiler angle="radian" autolimits="true"/>
+
+  <option timestep="0.002" integrator="implicitfast" gravity="0 0 -9.81"/>
+
+  <!-- Rendering: soft headlight off, use explicit lights; shadows + nicer quality -->
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="120" elevation="-20"/>
+    <quality shadowsize="4096"/>
+    <map force="0.1" zfar="30"/>
+  </visual>
+
+  <!-- Scene assets: gradient skybox + checkered ground plane -->
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0"
+             width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge"
+             rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" markrgb="0.8 0.8 0.8"
+             width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true"
+              texrepeat="5 5" reflectance="0.2"/>
+  </asset>
+
+  <default>
+    <joint limited="true"/>
+    <geom contype="0" conaffinity="0" condim="1" solref="0.008 1"/>
+    <position kp="400" kv="40" ctrllimited="true"/>
+  </default>
+
+  <worldbody>
+
+    <!-- Scene lighting and ground -->
+    <light pos="0 0 3.5" dir="0 0 -1" directional="true"
+           diffuse="0.4 0.4 0.4" specular="0.1 0.1 0.1"/>
+    <light pos="1.5 1.5 2.5" dir="-1 -1 -1.5" diffuse="0.5 0.5 0.5"/>
+    <geom name="floor" type="plane" size="0 0 0.05" pos="0 0 0"
+          material="groundplane"/>
+
+    <!-- Target marker: mocap body for visualizing desired end-effector position -->
+    <body name="target_body" mocap="true" pos="0.62 0.06 0.86">
+      <site name="target_site" type="sphere" size="0.025" rgba="1 0.5 0 0.8"/>
+    </body>
+
+    <!-- Virtual mobile base. Joint order base_x -> base_y -> base_yaw -> base_z.
+         base_z is REORDERED below base_yaw on purpose: it only lifts the arm,
+         not the chassis/wheels. This is kinematically identical for the EE
+         (a world-z translation commutes with a z-axis yaw rotation), so the
+         hand-written FK in robot_model.py is unchanged, but the wheels now stay
+         on the ground regardless of the lift command. -->
+    <body name="base_x_body" pos="0 0 0">
+      <inertial pos="0 0 0" mass="2.0" diaginertia="0.1 0.1 0.1"/>
+      <joint name="base_x" type="slide" axis="1 0 0" range="-3.0 3.0" damping="10.0"/>
+
+      <body name="base_y_body">
+        <inertial pos="0 0 0" mass="2.0" diaginertia="0.1 0.1 0.1"/>
+        <joint name="base_y" type="slide" axis="0 1 0" range="-3.0 3.0" damping="10.0"/>
+
+        <body name="base_yaw_body">
+          <inertial pos="0 0 0" mass="2.0" diaginertia="0.1 0.1 0.1"/>
+          <joint name="base_yaw" type="hinge" axis="0 0 1" range="-3.1416 3.1416" damping="5.0"/>
+
+          <!-- Chassis + wheels: children of base_yaw_body (NOT base_z_body), so
+               they translate/rotate with the base but never lift. Raised to
+               z=0.14 so the 0.1 m-radius wheels rest exactly on the floor. -->
+          <body name="chassis" pos="0 0 0.14">
+            <geom type="box" size="0.35 0.25 0.05" pos="0 0 0" rgba="0.2 0.2 0.7 1" mass="20.0"/>
+
+            <!-- Four wheels (visual only, cylinders). Wheel bottom at world z=0. -->
+            <geom type="cylinder" size="0.1 0.04" pos=" 0.25  0.22 -0.04"
+                  euler="1.5708 0 0" rgba="0.1 0.1 0.1 1" mass="1.0"/>
+            <geom type="cylinder" size="0.1 0.04" pos=" 0.25 -0.22 -0.04"
+                  euler="1.5708 0 0" rgba="0.1 0.1 0.1 1" mass="1.0"/>
+            <geom type="cylinder" size="0.1 0.04" pos="-0.25  0.22 -0.04"
+                  euler="1.5708 0 0" rgba="0.1 0.1 0.1 1" mass="1.0"/>
+            <geom type="cylinder" size="0.1 0.04" pos="-0.25 -0.22 -0.04"
+                  euler="1.5708 0 0" rgba="0.1 0.1 0.1 1" mass="1.0"/>
+          </body>
+
+          <!-- Lift stage: translates in world z. Only the arm rides on it. -->
+          <body name="base_z_body" pos="0 0 0">
+            <inertial pos="0 0 0.1" mass="2.0" diaginertia="0.05 0.05 0.05"/>
+            <joint name="base_z" type="slide" axis="0 0 1" range="0.0 0.5" damping="10.0"/>
+
+            <!-- Telescoping lift column: rises with the arm to keep it visually
+                 connected to the chassis. Spans from base (world z=base_z) up
+                 toward the shoulder (world z=base_z+0.27). -->
+            <geom type="cylinder" size="0.045 0.135" pos="0 0 0.135"
+                  rgba="0.5 0.5 0.5 1" mass="2.0"/>
+
+            <!-- UR5e arm: shoulder_link origin at pos 0 0 0.27 inside
+                 ur5e_kinematics.xml, so the shoulder sits at world z = base_z + 0.27. -->
+            <include file="ur5e/ur5e_kinematics.xml"/>
+          </body>
+
+        </body>
+      </body>
+    </body>
+
+  </worldbody>
+
+    <!-- Position actuators for all 10 DOFs -->
+  <actuator>
+    <!-- Horizontal base: gravity-free, moderate gains -->
+    <position name="act_base_x"     joint="base_x"             kp="2000" kv="200"
+              ctrlrange="-3.0 3.0"/>
+    <position name="act_base_y"     joint="base_y"             kp="2000" kv="200"
+              ctrlrange="-3.0 3.0"/>
+    <!-- Vertical lift: high kp needed to resist ~55kg arm+chassis weight (sag ~1.5cm) -->
+    <position name="act_base_z"     joint="base_z"             kp="35000" kv="800"
+              ctrlrange="0.0 0.5"/>
+    <position name="act_base_yaw"   joint="base_yaw"           kp="2000" kv="200"
+              ctrlrange="-3.1416 3.1416"/>
+    <!-- UR5e arm joints -->
+    <position name="act_shoulder_pan"   joint="shoulder_pan_joint"   kp="3000" kv="200"
+              ctrlrange="-6.2832 6.2832"/>
+    <position name="act_shoulder_lift"  joint="shoulder_lift_joint"  kp="3000" kv="200"
+              ctrlrange="-6.2832 6.2832"/>
+    <position name="act_elbow"          joint="elbow_joint"          kp="2000" kv="150"
+              ctrlrange="-3.1416 3.1416"/>
+    <position name="act_wrist_1"        joint="wrist_1_joint"        kp="500" kv="50"
+              ctrlrange="-6.2832 6.2832"/>
+    <position name="act_wrist_2"        joint="wrist_2_joint"        kp="500" kv="50"
+              ctrlrange="-6.2832 6.2832"/>
+    <position name="act_wrist_3"        joint="wrist_3_joint"        kp="500" kv="50"
+              ctrlrange="-6.2832 6.2832"/>
+  </actuator>
+
+</mujoco>
