@@ -1,6 +1,25 @@
-# Wheeled UR5e — Kinematic MPC with ALIGATOR
+# Wheeled UR5e — Whole-Body MPC with ALIGATOR
 
-10-DoF wheeled mobile manipulator whole-body MPC demo using ALIGATOR SolverProxDDP.
+10-DoF wheeled mobile manipulator control using kinematic and dynamic MPC approaches.
+
+## Quick Start (Phase 6-v2 Optimized) 🚀
+
+**Best performance: 1.75 cm RMS tracking error, 100% convergence**
+
+```bash
+cd wheeled_ur5e_aligator_mpc
+export PYTHONPATH=.:../../build/bindings/python
+pixi run -e all python scripts/demo_phase6_v2_optimized.py --render
+```
+
+Performance:
+- ✅ **Steady-state**: 1.50 cm RMS
+- ✅ **Startup**: 2.20 cm RMS (0-3s)
+- ✅ **Overall**: 1.75 cm RMS
+- ✅ **Convergence**: 99.7%
+- ✅ **Control freq**: 500 Hz
+
+---
 
 ## System Description
 
@@ -163,6 +182,56 @@ needed to hold ~55 kg arm weight against gravity.
 **Reference continuity**: Every scenario computes its starting point from
 `FK(q_nominal)` so the reference at t=0 matches the robot's initial posture,
 giving zero initial tracking error.
+
+## Available Phases
+
+### Phase 1-3: Kinematic MPC (Baseline)
+- **Status**: ✅ Production-ready
+- **Performance**: 1.83 cm RMS, 100% convergence
+- **Frequency**: 20 Hz MPC
+- **Use case**: Stable baseline for single-arm
+
+```bash
+pixi run -e all python scripts/run_demo.py --scenario ee_circle
+```
+
+### Phase 6-v2: Optimized Kinematic MPC (Recommended) ⭐
+- **Status**: ✅ **Best single-arm performance**
+- **Performance**: 1.75 cm RMS, 99.7% convergence
+- **Frequency**: 40 Hz MPC + 500 Hz control
+- **Features**: 
+  - Smooth startup (2s cubic ease-in)
+  - Adaptive PD gains (startup boost)
+  - Optimized weights
+- **Report**: See [PHASE6_V2_PERFORMANCE_REPORT.md](PHASE6_V2_PERFORMANCE_REPORT.md)
+
+```bash
+pixi run -e all python scripts/demo_phase6_v2_optimized.py --render
+```
+
+### Phase 6-v3: Dual-Arm Control
+- **Status**: ✅ Tested (Step 1: IK + gravity feedforward)
+- **Performance**: 2.28 cm RMS (dual-arm circle tracking)
+- **System**: 16-DOF (4 base + 6 left arm + 6 right arm)
+- **Actuators**: Torque control
+- **Guide**: See [docs/phase6/V3.md](docs/phase6/V3.md)
+
+```bash
+pixi run -e all python scripts/test_phase6_v3_step1_simple.py
+```
+
+---
+
+## Performance Comparison
+
+| Phase | Approach | DOF | RMS Error | Freq | Status |
+|-------|----------|-----|-----------|------|--------|
+| 1-3 | Kinematic MPC | 10 | 1.83 cm | 20 Hz | ✅ Baseline |
+| 4 | Hybrid Dynamics | 10 | 2.5-5 cm | 20 Hz | ❌ Failed |
+| **6-v2** | **Optimized Kinematic** | **10** | **1.75 cm** | **40 Hz** | ✅ **Best** |
+| 6-v3 | Dual-arm Torque | 16 | 2.28 cm | 20 Hz | ✅ Dual-arm |
+
+---
 
 ## Limitations
 

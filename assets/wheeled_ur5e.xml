@@ -47,7 +47,7 @@
 
     <!-- Target marker: mocap body for visualizing desired end-effector position -->
     <body name="target_body" mocap="true" pos="0.62 0.06 0.86">
-      <site name="target_site" type="sphere" size="0.025" rgba="1 0.5 0 0.8"/>
+      <site name="target_site" type="sphere" size="0.020" rgba="1 0.5 0 0.8"/>
     </body>
 
     <!-- Virtual mobile base. Joint order base_x -> base_y -> base_yaw -> base_z.

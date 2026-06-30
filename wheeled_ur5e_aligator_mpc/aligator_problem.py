@@ -47,6 +47,9 @@ except ImportError:
     import aligator.constraints
 
 from wheeled_ur5e_aligator_mpc.robot_model import WheeledUR5eModel
+from wheeled_ur5e_aligator_mpc.pinocchio_model import PinocchioWheeledUR5eModel
+from wheeled_ur5e_aligator_mpc.ee_pose_cost import EEPoseCost
+
 
 
 # ---------------------------------------------------------------------------
@@ -158,7 +161,9 @@ class EEPosCost(aligator.CostAbstract):
 
 DEFAULT_WEIGHTS = {
     "ee_pos": 100.0,
-    "terminal_ee": 200.0,
+    "ee_ori": 0.0,  # Orientation tracking weight (0 = position-only as before)
+    "terminal_ee_pos": 200.0,
+    "terminal_ee_ori": 0.0,
     # Base-pose tracking. These must be high relative to ee_pos: with low base
     # weights the solver "cheats" the EE target by drifting the base (e.g. in
     # ee_circle the base_x reference is constant 0, but a weak penalty let the
@@ -186,7 +191,8 @@ class KinematicWheeledUR5eProblemBuilder:
            q_min ≤ q_k ≤ q_max      (state soft penalty via QuadraticStateCost)
 
     Running cost l_k:
-      w_ee_pos   * ||fk(q_k) - p_ee_ref_k||^2
+      w_ee_pos   * ||p_ee_k - p_ee_ref_k||^2
+      w_ee_ori   * ||log3(R_ee_ref_k^T @ R_ee_k)||^2  (if w_ee_ori > 0)
       w_base_xy  * ||(q_k[:2] - base_ref_k[:2])||^2
       w_base_yaw * angle_error^2
       w_base_z   * (q_k[2] - base_z_ref_k)^2
@@ -195,12 +201,14 @@ class KinematicWheeledUR5eProblemBuilder:
       w_du       * ||u_k - u_{k-1}||^2
 
     Terminal cost l_N:
-      w_terminal_ee      * ||fk(q_N) - p_ee_ref_N||^2
+      w_terminal_ee_pos  * ||p_ee_N - p_ee_ref_N||^2
+      w_terminal_ee_ori  * ||log3(R_ee_ref_N^T @ R_ee_N)||^2  (if > 0)
       w_terminal_posture * ||q_arm_N - q_arm_nominal||^2
 
     Note: state box constraints are implemented as soft penalty (penalize deviation
     beyond bounds using Q-weight matrix). Hard constraints: u_min ≤ u ≤ u_max.
-    TODO (next version): add hard state box constraints via ALIGATOR constraint API.
+
+    Phase 3 adds optional hard state box constraints via use_hard_state_bounds flag.
     """
 
     def __init__(
@@ -209,15 +217,20 @@ class KinematicWheeledUR5eProblemBuilder:
         horizon: int = 20,
         dt: float = 0.05,
         weights: dict | None = None,
+        use_hard_state_bounds: bool = False,
     ):
         self.robot = robot
         self.horizon = horizon
         self.dt = dt
         self.weights = {**DEFAULT_WEIGHTS, **(weights or {})}
+        self.use_hard_state_bounds = use_hard_state_bounds
 
         self._space = aligator.manifolds.VectorSpace(robot.nx)
         self._nu = robot.nu
         self._dynamics = WheeledUR5eKinDynamics(robot.nx, robot, dt)
+
+        # Pinocchio model for pose cost (if orientation weight > 0)
+        self._pin_robot = PinocchioWheeledUR5eModel()
 
     # ------------------------------------------------------------------
     # Internal helper builders
@@ -226,10 +239,11 @@ class KinematicWheeledUR5eProblemBuilder:
     def _make_running_cost(
         self,
         p_ee_ref: np.ndarray,
+        R_ee_ref: np.ndarray,
         base_ref: np.ndarray,
         base_z_ref: float,
         u_prev: np.ndarray | None,
-    ) -> tuple[aligator.CostStack, EEPosCost]:
+    ) -> tuple[aligator.CostStack, EEPoseCost | None]:
         """Build running cost for one stage. Returns (CostStack, ee_cost_ref)."""
         w = self.weights
         space = self._space
@@ -238,9 +252,27 @@ class KinematicWheeledUR5eProblemBuilder:
 
         rcost = aligator.CostStack(space, nu)
 
-        # 1. End-effector position cost
-        ee_cost = EEPosCost(space, nu, self.robot, w["ee_pos"], p_ee_ref)
-        rcost.addCost("ee_pos", ee_cost)
+        # 1. End-effector cost
+        # Use EEPoseCost (position-only, no Pinocchio) if orientation weight is 0
+        # to avoid deepcopy issues with Pinocchio C++ objects
+        ee_cost = None
+        if w["ee_ori"] > 0:
+            # Full pose tracking with Pinocchio (position + orientation)
+            from wheeled_ur5e_aligator_mpc.ee_pose_cost import EEPoseCost as EEPoseCostFull
+            ee_cost = EEPoseCostFull(
+                space, nu, self._pin_robot,
+                w["ee_pos"], w["ee_ori"],
+                p_ee_ref, R_ee_ref
+            )
+            rcost.addCost("ee_pose", ee_cost)
+        else:
+            # Position-only tracking without Pinocchio (avoids deepcopy crash)
+            ee_pos_cost = EEPosCost(
+                space, nu, self.robot,
+                w["ee_pos"], p_ee_ref
+            )
+            rcost.addCost("ee_pos", ee_pos_cost)
+            ee_cost = ee_pos_cost  # Return for reference updates
 
         # 2. Base xy tracking
         base_xy_target = np.array([base_ref[0], base_ref[1]])
@@ -287,8 +319,8 @@ class KinematicWheeledUR5eProblemBuilder:
         return rcost, ee_cost
 
     def _make_terminal_cost(
-        self, p_ee_ref: np.ndarray
-    ) -> tuple[aligator.CostStack, EEPosCost]:
+        self, p_ee_ref: np.ndarray, R_ee_ref: np.ndarray
+    ) -> tuple[aligator.CostStack, EEPoseCost | None]:
         """Build terminal cost. Returns (CostStack, ee_cost_ref)."""
         w = self.weights
         space = self._space
@@ -297,9 +329,25 @@ class KinematicWheeledUR5eProblemBuilder:
 
         term_cost = aligator.CostStack(space, nu)
 
-        # Terminal EE cost (heavier)
-        ee_cost = EEPosCost(space, nu, self.robot, w["terminal_ee"], p_ee_ref)
-        term_cost.addCost("terminal_ee", ee_cost)
+        # Terminal EE cost
+        ee_cost = None
+        if w["terminal_ee_ori"] > 0:
+            # Full pose tracking with orientation
+            from wheeled_ur5e_aligator_mpc.ee_pose_cost import EEPoseCost as EEPoseCostFull
+            ee_cost = EEPoseCostFull(
+                space, nu, self._pin_robot,
+                w["terminal_ee_pos"], w["terminal_ee_ori"],
+                p_ee_ref, R_ee_ref
+            )
+            term_cost.addCost("terminal_ee_pose", ee_cost)
+        else:
+            # Position-only tracking (avoids Pinocchio deepcopy issue)
+            ee_pos_cost = EEPosCost(
+                space, nu, self.robot,
+                w["terminal_ee_pos"], p_ee_ref
+            )
+            term_cost.addCost("terminal_ee_pos", ee_pos_cost)
+            ee_cost = ee_pos_cost
 
         # Terminal posture
         W_posture = np.zeros(nq)
@@ -317,6 +365,12 @@ class KinematicWheeledUR5eProblemBuilder:
     # Public build interface
     # ------------------------------------------------------------------
 
+    def close(self) -> None:
+        """Explicitly release ALIGATOR C++ objects to avoid shutdown segfault."""
+        del self._dynamics
+        del self._space
+        del self.robot
+
     def build_problem(
         self,
         x0: np.ndarray,
@@ -331,6 +385,7 @@ class KinematicWheeledUR5eProblemBuilder:
         x0 : (10,) current joint state
         ref_traj : dict with keys:
             "ee_pos"  : (N+1, 3) end-effector reference positions
+            "ee_rot"  : (N+1, 3, 3) end-effector reference rotations
             "base"    : (N+1, 3) base_x, base_y, base_yaw reference
             "base_z"  : (N+1,)   base_z reference
         u_prev : (10,) previous control (for delta-u cost), or None
@@ -338,15 +393,16 @@ class KinematicWheeledUR5eProblemBuilder:
         Returns
         -------
         problem : aligator.TrajOptProblem
-        ee_costs : list of EEPosCost objects (running + terminal) for reference update
+        ee_costs : list of EEPoseCost objects (running + terminal) for reference update
         """
         N = self.horizon
         ee_pos_ref = ref_traj["ee_pos"]   # (N+1, 3)
+        ee_rot_ref = ref_traj["ee_rot"]   # (N+1, 3, 3)
         base_ref   = ref_traj["base"]      # (N+1, 3)
         base_z_ref = ref_traj["base_z"]    # (N+1,)
 
         # Build terminal cost
-        term_cost, term_ee_cost = self._make_terminal_cost(ee_pos_ref[N])
+        term_cost, term_ee_cost = self._make_terminal_cost(ee_pos_ref[N], ee_rot_ref[N])
 
         # Build problem
         problem = aligator.TrajOptProblem(x0, self._nu, self._space, term_cost)
@@ -357,6 +413,7 @@ class KinematicWheeledUR5eProblemBuilder:
             u_prev_k = u_prev if k == 0 else None
             rcost, ee_cost = self._make_running_cost(
                 ee_pos_ref[k],
+                ee_rot_ref[k],
                 base_ref[k],
                 float(base_z_ref[k]),
                 u_prev_k,
@@ -368,6 +425,12 @@ class KinematicWheeledUR5eProblemBuilder:
             ctrl_res = aligator.ControlErrorResidual(self._space.ndx, np.zeros(self._nu))
             box_cstr = aligator.constraints.BoxConstraint(self.robot.u_min, self.robot.u_max)
             stage.addConstraint(ctrl_res, box_cstr)
+
+            # Optional hard state box constraint: q_min ≤ q ≤ q_max
+            if self.use_hard_state_bounds:
+                state_res = aligator.StateErrorResidual(self._space, self._nu, np.zeros(self.robot.nq))
+                state_box = aligator.constraints.BoxConstraint(self.robot.q_min, self.robot.q_max)
+                stage.addConstraint(state_res, state_box)
 
             problem.addStage(stage)
 

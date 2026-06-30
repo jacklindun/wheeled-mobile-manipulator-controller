@@ -3,33 +3,29 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.Python
 *.egg-info/
-dist/
-build/
-.eggs/
 
-# Virtual environment
-.venv/
-venv/
-.env
+# Results and logs
+*.png
+*.npz
+*.log
+logs/
+
+# Temporary files
+.DS_Store
+*.swp
+*~
 
 # IDE
-.idea/
 .vscode/
-*.swp
-*.swo
+.idea/
+*.iml
 
-# Logs
-logs/
-*.log
-MUJOCO_LOG.TXT
+# MuJoCo
+*.mjb
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Jupyter
-.ipynb_checkpoints/
-
-# pytest
-.pytest_cache/
+# Keep results directory structure but ignore contents
+results/**/*.png
+results/**/*.npz
+!results/**/README.md

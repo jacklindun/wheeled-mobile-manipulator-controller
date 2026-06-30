@@ -2,12 +2,17 @@
 Reference trajectory generators for wheeled UR5e MPC scenarios.
 
 Returns ref_traj dict:
-  "ee_pos"  : (N+1, 3)  end-effector position reference
-  "base"    : (N+1, 3)  columns: base_x, base_y, base_yaw
-  "base_z"  : (N+1,)    base_z (lift height) reference
+  "ee_pos"  : (N+1, 3)    end-effector position reference
+  "ee_rot"  : (N+1, 3, 3) end-effector rotation matrix reference
+  "base"    : (N+1, 3)    columns: base_x, base_y, base_yaw
+  "base_z"  : (N+1,)      base_z (lift height) reference
 
 The ee_circle scenario places the circle so that at t=0 the reference
 starts exactly at FK(q_nominal), i.e. the robot begins tracking from rest.
+
+Default orientation (ee_rot): the FK(q_nominal) orientation, held constant
+throughout the trajectory. Orientation tracking is only active if the MPC
+cost has w_orientation > 0.
 """
 
 import numpy as np
@@ -30,18 +35,30 @@ class ReferenceGenerator:
         Used to compute the circle/line starting point so the robot
         begins with zero tracking error.  If None, uses the default
         nominal (FK at q_nominal).
+    ee_start_rot : (3, 3) optional EE rotation matrix at t=0.
+        Used as the reference orientation (held constant). If None, uses
+        the FK(q_nominal) orientation.
     """
 
     # Default start = FK(q_nominal) with shoulder_pan=pi, lift=pi/3, elbow=-pi/2, w1=pi/6
     _DEFAULT_EE_START = np.array([0.61880516, 0.0635, 0.85700198])
+    _DEFAULT_EE_ROT = np.array([
+        [-1.0, 0.0, 0.0],
+        [0.0, -1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ])  # R(q_nominal): tool pointing +X, flange upright
 
-    def __init__(self, scenario: str = "ee_circle", ee_start=None):
+    def __init__(self, scenario: str = "ee_circle", ee_start=None, ee_start_rot=None):
         if scenario not in ("ee_circle", "ee_line", "base_and_ee", "base_z_test"):
             raise ValueError(f"Unknown scenario: {scenario}")
         self.scenario = scenario
         self.ee_start = (
             np.asarray(ee_start, dtype=float) if ee_start is not None
             else self._DEFAULT_EE_START.copy()
+        )
+        self.ee_start_rot = (
+            np.asarray(ee_start_rot, dtype=float) if ee_start_rot is not None
+            else self._DEFAULT_EE_ROT.copy()
         )
 
     def get_reference(
@@ -61,10 +78,11 @@ class ReferenceGenerator:
 
         Returns
         -------
-        dict with "ee_pos" (N+1,3), "base" (N+1,3), "base_z" (N+1,)
+        dict with "ee_pos" (N+1,3), "ee_rot" (N+1,3,3), "base" (N+1,3), "base_z" (N+1,)
         """
         ts = t + np.arange(horizon + 1) * dt
         ee_pos = np.zeros((horizon + 1, 3))
+        ee_rot = np.tile(self.ee_start_rot, (horizon + 1, 1, 1))  # constant orientation
         base   = np.zeros((horizon + 1, 3))  # base_x, base_y, base_yaw
         base_z = np.zeros(horizon + 1)
 
@@ -77,7 +95,7 @@ class ReferenceGenerator:
         elif self.scenario == "base_z_test":
             self._base_z_test(ts, ee_pos, base, base_z, self.ee_start)
 
-        return {"ee_pos": ee_pos, "base": base, "base_z": base_z}
+        return {"ee_pos": ee_pos, "ee_rot": ee_rot, "base": base, "base_z": base_z}
 
     # ------------------------------------------------------------------
     # Scenario implementations

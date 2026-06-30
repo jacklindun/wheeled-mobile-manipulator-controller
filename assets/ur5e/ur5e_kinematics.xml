@@ -53,7 +53,7 @@
                      range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
               <geom type="cylinder" size="0.03 0.02" rgba="0.6 0.6 0.6 1" mass="0.195"/>
               <!-- ee_site: end-effector at flange (0.0996 m beyond wrist_3 center along z) -->
-              <site name="ee_site" pos="0 -0.0996 0" size="0.015" rgba="1 0 0 1" type="sphere"/>
+              <site name="ee_site" pos="0 -0.0996 0" size="0.020" rgba="1 0 0 1" type="sphere"/>
             </body>
           </body>
         </body>

@@ -207,3 +207,17 @@ class AligatorWholeBodyMPC:
         self._xs_warm = None
         self._us_warm = None
         self._u_last = np.zeros(self.robot.nu)
+
+    def close(self) -> None:
+        """Explicitly release ALIGATOR C++ objects in controlled order.
+
+        This prevents a segfault during Python interpreter shutdown caused by
+        non-deterministic destruction order of C++ extension objects (ALIGATOR,
+        MuJoCo, Pinocchio).
+        """
+        self._xs_warm = None
+        self._us_warm = None
+        del self._solver
+        self._builder.close()
+        del self._builder
+        del self.robot

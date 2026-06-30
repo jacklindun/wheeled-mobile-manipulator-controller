@@ -1,0 +1,69 @@
+<!-- Standalone 6-DOF UR5e arm MJCF for ABA (Phase 4).
+
+     This is the arm subtree from wheeled_ur5e.xml, extracted as a standalone
+     model with shoulder_link as a fixed-base root. Used by pinocchio to compute
+     arm dynamics (ABA) in the hybrid kino-dynamic controller.
+
+     Mass/inertia parameters match ur5e_kinematics.xml.
+-->
+<mujoco model="ur5e_arm_6dof">
+  <compiler angle="radian"/>
+
+  <option integrator="implicitfast"/>
+
+  <default>
+    <joint limited="true"/>
+    <geom contype="0" conaffinity="0" condim="1"/>
+  </default>
+
+  <worldbody>
+    <!-- UR5e arm, shoulder fixed at world origin -->
+    <body name="shoulder_link" pos="0 0 0">
+      <inertial pos="0 0 0" mass="3.761" diaginertia="0.01 0.01 0.01"/>
+      <joint name="shoulder_pan_joint" type="hinge" axis="0 0 1"
+             range="-6.2832 6.2832" damping="1.0" armature="0.1"/>
+      <geom type="cylinder" size="0.06 0.06" rgba="0.3 0.3 0.8 1"/>
+      <geom type="capsule" fromto="0 0 0 0 0 0.04" size="0.055" rgba="0.3 0.3 0.8 1"/>
+      <geom type="capsule" fromto="0 0 0 0 0.1358 0" size="0.05" rgba="0.3 0.3 0.8 1"/>
+
+      <body name="upper_arm_link" pos="0 0.1358 0">
+        <inertial pos="-0.2125 0 0" mass="8.058" diaginertia="0.2 0.2 0.01"/>
+        <joint name="shoulder_lift_joint" type="hinge" axis="0 1 0"
+               range="-6.2832 6.2832" damping="1.0" armature="0.1"/>
+        <geom type="capsule" fromto="0 0 0 -0.425 0 0" size="0.04" rgba="0.3 0.5 0.8 1"/>
+
+        <body name="forearm_link" pos="-0.425 0 0">
+          <inertial pos="-0.1961 0 0.067" mass="2.846" diaginertia="0.05 0.05 0.01"/>
+          <joint name="elbow_joint" type="hinge" axis="0 1 0"
+                 range="-3.1416 3.1416" damping="0.5" armature="0.1"/>
+          <geom type="capsule" fromto="0 0 0 -0.3922 0 0" size="0.035" rgba="0.3 0.6 0.7 1"/>
+          <geom type="capsule" fromto="-0.3922 0 0 -0.3922 0 0.1333" size="0.033" rgba="0.3 0.6 0.7 1"/>
+
+          <body name="wrist_1_link" pos="-0.3922 0 0.1333">
+            <inertial pos="0 -0.05 0" mass="1.37" diaginertia="0.005 0.005 0.005"/>
+            <joint name="wrist_1_joint" type="hinge" axis="0 1 0"
+                   range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+            <geom type="cylinder" size="0.032 0.035" rgba="0.5 0.5 0.5 1"/>
+            <geom type="capsule" fromto="0 0 0 0 -0.0997 0" size="0.031" rgba="0.5 0.5 0.5 1"/>
+
+            <body name="wrist_2_link" pos="0 -0.0997 0">
+              <inertial pos="0 0 0.05" mass="1.37" diaginertia="0.005 0.005 0.005"/>
+              <joint name="wrist_2_joint" type="hinge" axis="0 0 1"
+                     range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+              <geom type="cylinder" size="0.032 0.035" rgba="0.5 0.5 0.5 1"/>
+              <geom type="capsule" fromto="0 0 0 0 0 0.0996" size="0.031" rgba="0.5 0.5 0.5 1"/>
+
+              <body name="wrist_3_link" pos="0 0 0.0996">
+                <inertial pos="0 -0.05 0" mass="0.195" diaginertia="0.001 0.001 0.001"/>
+                <joint name="wrist_3_joint" type="hinge" axis="0 1 0"
+                       range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+                <geom type="cylinder" size="0.03 0.02" rgba="0.6 0.6 0.6 1"/>
+                <site name="ee_site" pos="0 -0.0996 0" size="0.015" rgba="1 0 0 1" type="sphere"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>

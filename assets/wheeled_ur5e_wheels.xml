@@ -1,0 +1,181 @@
+<!-- Wheeled UR5e with Physical Wheels (Phase 5)
+
+     From virtual base (Phase 1-4) to differential drive mobile base.
+
+     DOFs: 12 total
+       - base: 4 (x, y, z, yaw) - virtual joints for positioning
+       - wheels: 2 (left_wheel, right_wheel) - physical wheels
+       - arm: 6 (UR5e)
+
+     Controls: 8 total
+       - wheels: 2 (τ_left, τ_right) - wheel motor torques
+       - arm: 6 (τ_arm) - arm joint torques
+
+     Key features:
+       - Differential drive kinematics
+       - Non-holonomic constraint (no lateral slip)
+       - Physical wheel inertia and friction
+-->
+<mujoco model="wheeled_ur5e_with_wheels">
+  <compiler angle="radian" autolimits="true"/>
+
+  <option timestep="0.002" integrator="implicitfast" gravity="0 0 -9.81"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="120" elevation="-20"/>
+    <quality shadowsize="4096"/>
+    <map force="0.1" zfar="30"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0"
+             width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge"
+             rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" markrgb="0.8 0.8 0.8"
+             width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true"
+              texrepeat="5 5" reflectance="0.2"/>
+  </asset>
+
+  <default>
+    <joint limited="true"/>
+    <geom contype="1" conaffinity="1" condim="3" solref="0.008 1"/>
+    <motor ctrllimited="true"/>
+  </default>
+
+  <worldbody>
+
+    <!-- Scene -->
+    <light pos="0 0 3.5" dir="0 0 -1" directional="true"
+           diffuse="0.4 0.4 0.4" specular="0.1 0.1 0.1"/>
+    <light pos="1.5 1.5 2.5" dir="-1 -1 -1.5" diffuse="0.5 0.5 0.5"/>
+    <geom name="floor" type="plane" size="0 0 0.05" pos="0 0 0"
+          material="groundplane"/>
+
+    <!-- Target marker -->
+    <body name="target_body" mocap="true" pos="0.62 0.06 0.86">
+      <site name="target_site" type="sphere" size="0.020" rgba="1 0.5 0 0.8"/>
+    </body>
+
+    <!-- Virtual mobile base (for positioning, will be constrained by wheel dynamics) -->
+    <body name="base_x_body" pos="0 0 0">
+      <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>
+      <joint name="base_x" type="slide" axis="1 0 0" range="-5.0 5.0" damping="0"/>
+
+      <body name="base_y_body">
+        <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>
+        <joint name="base_y" type="slide" axis="0 1 0" range="-5.0 5.0" damping="0"/>
+
+        <body name="base_yaw_body">
+          <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>
+          <joint name="base_yaw" type="hinge" axis="0 0 1" range="-6.2832 6.2832" damping="0"/>
+
+          <body name="base_z_body" pos="0 0 0">
+            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>
+            <joint name="base_z" type="slide" axis="0 0 1" range="0.0 0.5" damping="0"/>
+
+            <!-- Chassis at lift height -->
+            <body name="chassis" pos="0 0 0.14">
+              <inertial pos="0 0 0" mass="30.0" diaginertia="1.0 1.0 0.5"/>
+              <geom type="box" size="0.35 0.25 0.05" pos="0 0 0" rgba="0.2 0.2 0.7 1"/>
+
+              <!-- Left wheel -->
+              <body name="left_wheel_body" pos="0 0.25 -0.04">
+                <inertial pos="0 0 0" mass="2.0" diaginertia="0.01 0.01 0.01"/>
+                <joint name="left_wheel_joint" type="hinge" axis="0 1 0"
+                       range="-100 100" damping="0.1" armature="0.01"/>
+                <geom type="cylinder" size="0.1 0.04" euler="1.5708 0 0"
+                      rgba="0.1 0.1 0.1 1" friction="1.0 0.005 0.0001"/>
+              </body>
+
+              <!-- Right wheel -->
+              <body name="right_wheel_body" pos="0 -0.25 -0.04">
+                <inertial pos="0 0 0" mass="2.0" diaginertia="0.01 0.01 0.01"/>
+                <joint name="right_wheel_joint" type="hinge" axis="0 1 0"
+                       range="-100 100" damping="0.1" armature="0.01"/>
+                <geom type="cylinder" size="0.1 0.04" euler="1.5708 0 0"
+                      rgba="0.1 0.1 0.1 1" friction="1.0 0.005 0.0001"/>
+              </body>
+
+              <!-- UR5e arm mounted on chassis -->
+              <body name="shoulder_link" pos="0 0 0.27">
+                <inertial pos="0 0 0" mass="3.761" diaginertia="0.01 0.01 0.01"/>
+                <joint name="shoulder_pan_joint" type="hinge" axis="0 0 1"
+                       range="-6.2832 6.2832" damping="1.0" armature="0.1"/>
+                <geom type="cylinder" size="0.06 0.06" rgba="0.3 0.3 0.8 1"/>
+                <geom type="capsule" fromto="0 0 0 0 0 0.04" size="0.055" rgba="0.3 0.3 0.8 1"/>
+                <geom type="capsule" fromto="0 0 0 0 0.1358 0" size="0.05" rgba="0.3 0.3 0.8 1"/>
+
+                <body name="upper_arm_link" pos="0 0.1358 0">
+                  <inertial pos="-0.2125 0 0" mass="8.058" diaginertia="0.2 0.2 0.01"/>
+                  <joint name="shoulder_lift_joint" type="hinge" axis="0 1 0"
+                         range="-6.2832 6.2832" damping="1.0" armature="0.1"/>
+                  <geom type="capsule" fromto="0 0 0 -0.425 0 0" size="0.04" rgba="0.3 0.5 0.8 1"/>
+
+                  <body name="forearm_link" pos="-0.425 0 0">
+                    <inertial pos="-0.1961 0 0.067" mass="2.846" diaginertia="0.05 0.05 0.01"/>
+                    <joint name="elbow_joint" type="hinge" axis="0 1 0"
+                           range="-3.1416 3.1416" damping="0.5" armature="0.1"/>
+                    <geom type="capsule" fromto="0 0 0 -0.3922 0 0" size="0.035" rgba="0.3 0.6 0.7 1"/>
+                    <geom type="capsule" fromto="-0.3922 0 0 -0.3922 0 0.1333" size="0.033" rgba="0.3 0.6 0.7 1"/>
+
+                    <body name="wrist_1_link" pos="-0.3922 0 0.1333">
+                      <inertial pos="0 -0.05 0" mass="1.37" diaginertia="0.005 0.005 0.005"/>
+                      <joint name="wrist_1_joint" type="hinge" axis="0 1 0"
+                             range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+                      <geom type="cylinder" size="0.032 0.035" rgba="0.5 0.5 0.5 1"/>
+                      <geom type="capsule" fromto="0 0 0 0 -0.0997 0" size="0.031" rgba="0.5 0.5 0.5 1"/>
+
+                      <body name="wrist_2_link" pos="0 -0.0997 0">
+                        <inertial pos="0 0 0.05" mass="1.37" diaginertia="0.005 0.005 0.005"/>
+                        <joint name="wrist_2_joint" type="hinge" axis="0 0 1"
+                               range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+                        <geom type="cylinder" size="0.032 0.035" rgba="0.5 0.5 0.5 1"/>
+                        <geom type="capsule" fromto="0 0 0 0 0 0.0996" size="0.031" rgba="0.5 0.5 0.5 1"/>
+
+                        <body name="wrist_3_link" pos="0 0 0.0996">
+                          <inertial pos="0 -0.05 0" mass="0.195" diaginertia="0.001 0.001 0.001"/>
+                          <joint name="wrist_3_joint" type="hinge" axis="0 1 0"
+                                 range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+                          <geom type="cylinder" size="0.03 0.02" rgba="0.6 0.6 0.6 1"/>
+                          <site name="ee_site" pos="0 -0.0996 0" size="0.020" rgba="1 0 0 1" type="sphere"/>
+                        </body>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+
+  </worldbody>
+
+  <actuator>
+    <!-- Virtual base actuators (will be removed/disabled in pure wheel control mode) -->
+    <velocity name="act_base_x" joint="base_x" kv="100" ctrlrange="-1 1"/>
+    <velocity name="act_base_y" joint="base_y" kv="100" ctrlrange="-1 1"/>
+    <velocity name="act_base_z" joint="base_z" kv="100" ctrlrange="-0.5 0.5"/>
+    <velocity name="act_base_yaw" joint="base_yaw" kv="50" ctrlrange="-3.14 3.14"/>
+
+    <!-- Wheel motors (differential drive) -->
+    <motor name="act_left_wheel" joint="left_wheel_joint" gear="50"
+           ctrlrange="-10 10" ctrllimited="true"/>
+    <motor name="act_right_wheel" joint="right_wheel_joint" gear="50"
+           ctrlrange="-10 10" ctrllimited="true"/>
+
+    <!-- Arm motors (torque control) -->
+    <motor name="act_shoulder_pan" joint="shoulder_pan_joint" ctrlrange="-150 150" gear="1"/>
+    <motor name="act_shoulder_lift" joint="shoulder_lift_joint" ctrlrange="-150 150" gear="1"/>
+    <motor name="act_elbow" joint="elbow_joint" ctrlrange="-150 150" gear="1"/>
+    <motor name="act_wrist_1" joint="wrist_1_joint" ctrlrange="-28 28" gear="1"/>
+    <motor name="act_wrist_2" joint="wrist_2_joint" ctrlrange="-28 28" gear="1"/>
+    <motor name="act_wrist_3" joint="wrist_3_joint" ctrlrange="-28 28" gear="1"/>
+  </actuator>
+
+</mujoco>

@@ -1,0 +1,339 @@
+<!--
+  Wheeled Dual UR5e V2
+
+  Purpose:
+    A cleaner four-wheel dual-arm mobile manipulator MJCF for visualization,
+    kinematic MPC, and Pinocchio FK/Jacobian checks.
+
+  Compatibility:
+    - Keeps the same 16 actuated DOFs and joint names as wheeled_dual_ur5e.xml:
+        base_x, base_y, base_yaw, base_z,
+        left_* six arm joints,
+        right_* six arm joints.
+    - Keeps left_ee_site / right_ee_site and left/right target mocap names.
+    - Wheels are high-quality visual geometry in this version. They intentionally
+      do not add wheel joints, so the existing dual-arm MPC code remains 16-DOF.
+
+  Geometry concept:
+    Four-wheel mobile base + top deck + fixed mast + moving lift carriage +
+    two side-by-side UR5e-style arms on shoulder pedestals.
+-->
+<mujoco model="wheeled_dual_ur5e_v2">
+  <compiler angle="radian" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast" gravity="0 0 -9.81"/>
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="125" elevation="-18"/>
+    <quality shadowsize="4096"/>
+    <map force="0.1" zfar="30"/>
+  </visual>
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.28 0.40 0.56" rgb2="0.02 0.03 0.05" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.22 0.25 0.28" rgb2="0.12 0.15 0.18" markrgb="0.75 0.75 0.75" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="6 6" reflectance="0.18"/>
+    <material name="mat_base_dark" rgba="0.055 0.060 0.070 1"/>
+    <material name="mat_base_panel" rgba="0.18 0.21 0.24 1"/>
+    <material name="mat_base_blue" rgba="0.12 0.20 0.34 1"/>
+    <material name="mat_rubber" rgba="0.015 0.015 0.015 1"/>
+    <material name="mat_hub" rgba="0.55 0.57 0.58 1"/>
+    <material name="mat_aluminum" rgba="0.62 0.64 0.66 1"/>
+    <material name="mat_column" rgba="0.38 0.42 0.46 1"/>
+    <material name="mat_accent" rgba="1.0 0.48 0.10 1"/>
+    <material name="mat_left_arm" rgba="0.06 0.72 0.42 1"/>
+    <material name="mat_left_arm_light" rgba="0.16 0.88 0.55 1"/>
+    <material name="mat_right_arm" rgba="0.12 0.48 0.95 1"/>
+    <material name="mat_right_arm_light" rgba="0.25 0.62 1.00 1"/>
+    <material class="ur5e" name="black" rgba="0.033 0.033 0.033 1"/>
+    <material class="ur5e" name="jointgray" rgba="0.278 0.278 0.278 1"/>
+    <material class="ur5e" name="linkgray" rgba="0.82 0.82 0.82 1"/>
+    <material class="ur5e" name="urblue" rgba="0.49 0.678 0.8 1"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/base_0.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/base_1.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/shoulder_0.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/shoulder_1.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/shoulder_2.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/upperarm_0.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/upperarm_1.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/upperarm_2.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/upperarm_3.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/forearm_0.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/forearm_1.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/forearm_2.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/forearm_3.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/wrist1_0.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/wrist1_1.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/wrist1_2.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/wrist2_0.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/wrist2_1.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/wrist2_2.obj"/>
+    <mesh file="mujoco_menager/mujoco_menagerie/universal_robots_ur5e/assets/wrist3.obj"/>
+  </asset>
+  <default>
+    <!-- This model is currently used as a controlled kinematic/position-servo
+         asset. Disable robot contacts by default to avoid self-contact artifacts
+         while retaining the floor for visual reference. -->
+    <joint limited="true"/>
+    <geom contype="0" conaffinity="0" condim="1" solref="0.008 1"/>
+    <position kp="400" kv="40" ctrllimited="true"/>
+    <default class="ur5e">
+      <material specular="0.5" shininess="0.25"/>
+      <joint axis="0 1 0" range="-6.28319 6.28319" armature="0.1"/>
+      <general gaintype="fixed" biastype="affine" ctrlrange="-6.2831 6.2831" gainprm="2000" biasprm="0 -2000 -400" forcerange="-150 150"/>
+      <default class="size3">
+        <default class="size3_limited">
+          <joint range="-3.1415 3.1415"/>
+          <general ctrlrange="-3.1415 3.1415"/>
+        </default>
+      </default>
+      <default class="size1">
+        <general gainprm="500" biasprm="0 -500 -100" forcerange="-28 28"/>
+      </default>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom type="capsule" group="3"/>
+        <default class="eef_collision">
+          <geom type="cylinder"/>
+        </default>
+      </default>
+      <site size="0.001" rgba="0.5 0.5 0.5 0.3" group="4"/>
+    </default>
+  </default>
+  <worldbody>
+    <light pos="0 0 3.8" dir="0 0 -1" directional="true" diffuse="0.45 0.45 0.45" specular="0.10 0.10 0.10"/>
+    <light pos="2.0 1.4 2.4" dir="-1.5 -1 -1.3" diffuse="0.55 0.55 0.55"/>
+    <geom name="floor" type="plane" size="0 0 0.05" pos="0 0 0" material="groundplane" contype="1" conaffinity="1"/>
+    <body name="left_target_body" mocap="true" pos="0.78 0.34 0.86">
+      <site name="left_target_site" type="sphere" size="0.025" rgba="0 1 0 0.82"/>
+    </body>
+    <body name="right_target_body" mocap="true" pos="0.78 -0.34 0.86">
+      <site name="right_target_site" type="sphere" size="0.025" rgba="0 0.85 1 0.82"/>
+    </body>
+    <!-- Virtual mobile base. Joint order intentionally matches the existing
+         dual-arm model: base_x -> base_y -> base_yaw -> base_z -> arms. -->
+    <body name="base_x_body" pos="0 0 0">
+      <inertial pos="0 0 0" mass="1.0" diaginertia="0.05 0.05 0.05"/>
+      <joint name="base_x" type="slide" axis="1 0 0" range="-3.0 3.0" damping="10.0"/>
+      <body name="base_y_body">
+        <inertial pos="0 0 0" mass="1.0" diaginertia="0.05 0.05 0.05"/>
+        <joint name="base_y" type="slide" axis="0 1 0" range="-3.0 3.0" damping="10.0"/>
+        <body name="base_yaw_body">
+          <inertial pos="0 0 0" mass="1.0" diaginertia="0.05 0.05 0.05"/>
+          <joint name="base_yaw" type="hinge" axis="0 0 1" range="-3.1416 3.1416" damping="5.0"/>
+          <!-- Four-wheel industrial mobile base. The wheels stay on the floor
+               because they are attached before the virtual lift joint. -->
+          <body name="mobile_base" pos="0 0 0.18">
+            <inertial pos="0 0 0.02" mass="58.0" diaginertia="4.0 5.0 6.0"/>
+            <!-- Lower tub and top equipment deck -->
+            <geom type="box" size="0.58 0.40 0.070" pos="0 0 0.000" material="mat_base_dark" mass="34.0"/>
+            <geom type="box" size="0.52 0.34 0.035" pos="0.02 0 0.115" material="mat_base_panel" mass="12.0"/>
+            <geom type="box" size="0.30 0.37 0.020" pos="0.19 0 0.165" material="mat_base_blue" mass="4.0"/>
+            <geom type="box" size="0.24 0.30 0.020" pos="-0.24 0 0.158" material="mat_base_panel" mass="3.0"/>
+            <!-- Orange protective bumper rails -->
+            <geom type="capsule" fromto=" 0.58  0.39 0.020  0.58 -0.39 0.020" size="0.025" material="mat_accent" mass="0.7"/>
+            <geom type="capsule" fromto="-0.58  0.39 0.020 -0.58 -0.39 0.020" size="0.025" material="mat_accent" mass="0.7"/>
+            <geom type="capsule" fromto="-0.52  0.43 0.020  0.52  0.43 0.020" size="0.025" material="mat_accent" mass="0.7"/>
+            <geom type="capsule" fromto="-0.52 -0.43 0.020  0.52 -0.43 0.020" size="0.025" material="mat_accent" mass="0.7"/>
+            <!-- Four wheel modules: tire, hub, and fork. Visual only in V2. -->
+            <body name="front_left_wheel_module" pos="0.43 0.42 -0.050">
+              <geom type="box" size="0.070 0.030 0.085" pos="0 -0.045 0.040" material="mat_column" mass="0.8"/>
+              <geom type="cylinder" size="0.130 0.055" euler="1.5708 0 0" material="mat_rubber" mass="2.5"/>
+              <geom type="cylinder" size="0.065 0.060" euler="1.5708 0 0" material="mat_hub" mass="0.5"/>
+            </body>
+            <body name="front_right_wheel_module" pos="0.43 -0.42 -0.050">
+              <geom type="box" size="0.070 0.030 0.085" pos="0 0.045 0.040" material="mat_column" mass="0.8"/>
+              <geom type="cylinder" size="0.130 0.055" euler="1.5708 0 0" material="mat_rubber" mass="2.5"/>
+              <geom type="cylinder" size="0.065 0.060" euler="1.5708 0 0" material="mat_hub" mass="0.5"/>
+            </body>
+            <body name="rear_left_wheel_module" pos="-0.43 0.42 -0.050">
+              <geom type="box" size="0.070 0.030 0.085" pos="0 -0.045 0.040" material="mat_column" mass="0.8"/>
+              <geom type="cylinder" size="0.130 0.055" euler="1.5708 0 0" material="mat_rubber" mass="2.5"/>
+              <geom type="cylinder" size="0.065 0.060" euler="1.5708 0 0" material="mat_hub" mass="0.5"/>
+            </body>
+            <body name="rear_right_wheel_module" pos="-0.43 -0.42 -0.050">
+              <geom type="box" size="0.070 0.030 0.085" pos="0 0.045 0.040" material="mat_column" mass="0.8"/>
+              <geom type="cylinder" size="0.130 0.055" euler="1.5708 0 0" material="mat_rubber" mass="2.5"/>
+              <geom type="cylinder" size="0.065 0.060" euler="1.5708 0 0" material="mat_hub" mass="0.5"/>
+            </body>
+            <!-- Fixed mast / torso rails on the chassis. The moving carriage and
+                 arms are children of base_z_body below. -->
+            <geom type="box" size="0.060 0.035 0.260" pos="-0.12  0.16 0.400" material="mat_column" mass="3.0"/>
+            <geom type="box" size="0.060 0.035 0.260" pos="-0.12 -0.16 0.400" material="mat_column" mass="3.0"/>
+            <geom type="box" size="0.090 0.220 0.035" pos="-0.12 0 0.665" material="mat_aluminum" mass="2.0"/>
+          </body>
+          <!-- Virtual lift. Only the upper carriage and arms move vertically. -->
+          <body name="base_z_body" pos="0 0 0">
+            <inertial pos="0 0 0.55" mass="10.0" diaginertia="0.6 0.6 0.4"/>
+            <joint name="base_z" type="slide" axis="0 0 1" range="0.0 0.5" damping="10.0"/>
+            <!-- Moving lift carriage and dual shoulder bridge -->
+            <geom type="box" size="0.075 0.145 0.045" pos="-0.12 0 0.635" material="mat_accent" mass="3.0"/>
+            <geom type="box" size="0.340 0.055 0.045" pos="0.10 0.46 0.520" material="mat_aluminum" mass="2.0"/>
+            <geom type="box" size="0.340 0.055 0.045" pos="0.10 -0.46 0.520" material="mat_aluminum" mass="2.0"/>
+            <geom type="box" size="0.065 0.330 0.035" pos="0.14 0 0.515" material="mat_aluminum" mass="2.0"/>
+            <!-- Left shoulder pedestal -->
+            <body name="left_shoulder_mount" pos="0.18 0.46 0.520">
+              <inertial pos="0 0 0.035" mass="5.0" diaginertia="0.10 0.10 0.08"/>
+              <geom type="cylinder" size="0.090 0.025" pos="0 0 0.000" material="mat_aluminum" mass="1.0"/>
+              <geom type="cylinder" size="0.075 0.055" pos="0 0 0.060" material="mat_left_arm" mass="2.0"/>
+              <body name="left_ur5e_base" quat="-0.70710678 0 0 -0.70710678" childclass="ur5e" pos="0 0 0.095">
+                <inertial mass="4.0" pos="0 0 0" diaginertia="0.00443333156 0.00443333156 0.0072"/>
+                <geom mesh="base_0" material="black" class="visual"/>
+                <geom mesh="base_1" material="jointgray" class="visual"/>
+                <body name="left_shoulder_link" pos="0 0 0.163">
+                  <inertial mass="3.7" pos="0 0 0" diaginertia="0.0102675 0.0102675 0.00666"/>
+                  <joint name="left_shoulder_pan_joint" class="size3" axis="0 0 1"/>
+                  <geom mesh="shoulder_0" material="urblue" class="visual"/>
+                  <geom mesh="shoulder_1" material="black" class="visual"/>
+                  <geom mesh="shoulder_2" material="jointgray" class="visual"/>
+                  <geom class="collision" size="0.06 0.06" pos="0 0 -0.04"/>
+                  <body name="left_upper_arm_link" pos="0 0.138 0" quat="1 0 1 0">
+                    <inertial mass="8.393" pos="0 0 0.2125" diaginertia="0.133886 0.133886 0.0151074"/>
+                    <joint name="left_shoulder_lift_joint" class="size3"/>
+                    <geom mesh="upperarm_0" material="linkgray" class="visual"/>
+                    <geom mesh="upperarm_1" material="black" class="visual"/>
+                    <geom mesh="upperarm_2" material="jointgray" class="visual"/>
+                    <geom mesh="upperarm_3" material="urblue" class="visual"/>
+                    <geom class="collision" pos="0 -0.04 0" quat="1 1 0 0" size="0.06 0.06"/>
+                    <geom class="collision" size="0.05 0.2" pos="0 0 0.2"/>
+                    <body name="left_forearm_link" pos="0 -0.131 0.425">
+                      <inertial mass="2.275" pos="0 0 0.196" diaginertia="0.0311796 0.0311796 0.004095"/>
+                      <joint name="left_elbow_joint" class="size3_limited"/>
+                      <geom mesh="forearm_0" material="urblue" class="visual"/>
+                      <geom mesh="forearm_1" material="linkgray" class="visual"/>
+                      <geom mesh="forearm_2" material="black" class="visual"/>
+                      <geom mesh="forearm_3" material="jointgray" class="visual"/>
+                      <geom class="collision" pos="0 0.08 0" quat="1 1 0 0" size="0.055 0.06"/>
+                      <geom class="collision" size="0.038 0.19" pos="0 0 0.2"/>
+                      <body name="left_wrist_1_link" pos="0 0 0.392" quat="1 0 1 0">
+                        <inertial mass="1.219" pos="0 0.127 0" diaginertia="0.0025599 0.0025599 0.0021942"/>
+                        <joint name="left_wrist_1_joint" class="size1"/>
+                        <geom mesh="wrist1_0" material="black" class="visual"/>
+                        <geom mesh="wrist1_1" material="urblue" class="visual"/>
+                        <geom mesh="wrist1_2" material="jointgray" class="visual"/>
+                        <geom class="collision" pos="0 0.05 0" quat="1 1 0 0" size="0.04 0.07"/>
+                        <body name="left_wrist_2_link" pos="0 0.127 0">
+                          <inertial mass="1.219" pos="0 0 0.1" diaginertia="0.0025599 0.0025599 0.0021942"/>
+                          <joint name="left_wrist_2_joint" axis="0 0 1" class="size1"/>
+                          <geom mesh="wrist2_0" material="black" class="visual"/>
+                          <geom mesh="wrist2_1" material="urblue" class="visual"/>
+                          <geom mesh="wrist2_2" material="jointgray" class="visual"/>
+                          <geom class="collision" size="0.04 0.06" pos="0 0 0.04"/>
+                          <geom class="collision" pos="0 0.02 0.1" quat="1 1 0 0" size="0.04 0.04"/>
+                          <body name="left_wrist_3_link" pos="0 0 0.1">
+                            <inertial mass="0.1889" pos="0 0.0771683 0" quat="1 0 0 1" diaginertia="0.000132134 9.90863e-05 9.90863e-05"/>
+                            <joint name="left_wrist_3_joint" class="size1"/>
+                            <geom material="linkgray" mesh="wrist3" class="visual"/>
+                            <geom class="eef_collision" pos="0 0.08 0" quat="1 1 0 0" size="0.04 0.02"/>
+                            <site name="left_ee_site" pos="0 0.1 0" quat="-1 1 0 0" size="0.022" rgba="0 1 0 1" type="sphere"/>
+                          </body>
+                        </body>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+            <!-- Right shoulder pedestal -->
+            <body name="right_shoulder_mount" pos="0.18 -0.46 0.520">
+              <inertial pos="0 0 0.035" mass="5.0" diaginertia="0.10 0.10 0.08"/>
+              <geom type="cylinder" size="0.090 0.025" pos="0 0 0.000" material="mat_aluminum" mass="1.0"/>
+              <geom type="cylinder" size="0.075 0.055" pos="0 0 0.060" material="mat_right_arm" mass="2.0"/>
+              <body name="right_ur5e_base" quat="0.70710678 0 0 -0.70710678" childclass="ur5e" pos="0 0 0.095">
+                <inertial mass="4.0" pos="0 0 0" diaginertia="0.00443333156 0.00443333156 0.0072"/>
+                <geom mesh="base_0" material="black" class="visual"/>
+                <geom mesh="base_1" material="jointgray" class="visual"/>
+                <body name="right_shoulder_link" pos="0 0 0.163">
+                  <inertial mass="3.7" pos="0 0 0" diaginertia="0.0102675 0.0102675 0.00666"/>
+                  <joint name="right_shoulder_pan_joint" class="size3" axis="0 0 1"/>
+                  <geom mesh="shoulder_0" material="urblue" class="visual"/>
+                  <geom mesh="shoulder_1" material="black" class="visual"/>
+                  <geom mesh="shoulder_2" material="jointgray" class="visual"/>
+                  <geom class="collision" size="0.06 0.06" pos="0 0 -0.04"/>
+                  <body name="right_upper_arm_link" pos="0 0.138 0" quat="1 0 1 0">
+                    <inertial mass="8.393" pos="0 0 0.2125" diaginertia="0.133886 0.133886 0.0151074"/>
+                    <joint name="right_shoulder_lift_joint" class="size3"/>
+                    <geom mesh="upperarm_0" material="linkgray" class="visual"/>
+                    <geom mesh="upperarm_1" material="black" class="visual"/>
+                    <geom mesh="upperarm_2" material="jointgray" class="visual"/>
+                    <geom mesh="upperarm_3" material="urblue" class="visual"/>
+                    <geom class="collision" pos="0 -0.04 0" quat="1 1 0 0" size="0.06 0.06"/>
+                    <geom class="collision" size="0.05 0.2" pos="0 0 0.2"/>
+                    <body name="right_forearm_link" pos="0 -0.131 0.425">
+                      <inertial mass="2.275" pos="0 0 0.196" diaginertia="0.0311796 0.0311796 0.004095"/>
+                      <joint name="right_elbow_joint" class="size3_limited"/>
+                      <geom mesh="forearm_0" material="urblue" class="visual"/>
+                      <geom mesh="forearm_1" material="linkgray" class="visual"/>
+                      <geom mesh="forearm_2" material="black" class="visual"/>
+                      <geom mesh="forearm_3" material="jointgray" class="visual"/>
+                      <geom class="collision" pos="0 0.08 0" quat="1 1 0 0" size="0.055 0.06"/>
+                      <geom class="collision" size="0.038 0.19" pos="0 0 0.2"/>
+                      <body name="right_wrist_1_link" pos="0 0 0.392" quat="1 0 1 0">
+                        <inertial mass="1.219" pos="0 0.127 0" diaginertia="0.0025599 0.0025599 0.0021942"/>
+                        <joint name="right_wrist_1_joint" class="size1"/>
+                        <geom mesh="wrist1_0" material="black" class="visual"/>
+                        <geom mesh="wrist1_1" material="urblue" class="visual"/>
+                        <geom mesh="wrist1_2" material="jointgray" class="visual"/>
+                        <geom class="collision" pos="0 0.05 0" quat="1 1 0 0" size="0.04 0.07"/>
+                        <body name="right_wrist_2_link" pos="0 0.127 0">
+                          <inertial mass="1.219" pos="0 0 0.1" diaginertia="0.0025599 0.0025599 0.0021942"/>
+                          <joint name="right_wrist_2_joint" axis="0 0 1" class="size1"/>
+                          <geom mesh="wrist2_0" material="black" class="visual"/>
+                          <geom mesh="wrist2_1" material="urblue" class="visual"/>
+                          <geom mesh="wrist2_2" material="jointgray" class="visual"/>
+                          <geom class="collision" size="0.04 0.06" pos="0 0 0.04"/>
+                          <geom class="collision" pos="0 0.02 0.1" quat="1 1 0 0" size="0.04 0.04"/>
+                          <body name="right_wrist_3_link" pos="0 0 0.1">
+                            <inertial mass="0.1889" pos="0 0.0771683 0" quat="1 0 0 1" diaginertia="0.000132134 9.90863e-05 9.90863e-05"/>
+                            <joint name="right_wrist_3_joint" class="size1"/>
+                            <geom material="linkgray" mesh="wrist3" class="visual"/>
+                            <geom class="eef_collision" pos="0 0.08 0" quat="1 1 0 0" size="0.04 0.02"/>
+                            <site name="right_ee_site" pos="0 0.1 0" quat="-1 1 0 0" size="0.022" rgba="0 0.85 1 1" type="sphere"/>
+                          </body>
+                        </body>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <!-- Base actuators (4): same names/order as the original dual-arm model. -->
+    <position name="act_base_x" joint="base_x" kp="2000" kv="200" ctrlrange="-3.0 3.0"/>
+    <position name="act_base_y" joint="base_y" kp="2000" kv="200" ctrlrange="-3.0 3.0"/>
+    <position name="act_base_z" joint="base_z" kp="35000" kv="800" ctrlrange="0.0 0.5"/>
+    <position name="act_base_yaw" joint="base_yaw" kp="2000" kv="200" ctrlrange="-3.1416 3.1416"/>
+    <!-- Left arm actuators (6) -->
+    <position name="act_left_shoulder_pan" joint="left_shoulder_pan_joint" kp="2600" kv="190" ctrlrange="-6.28 6.28"/>
+    <position name="act_left_shoulder_lift" joint="left_shoulder_lift_joint" kp="2600" kv="190" ctrlrange="-6.28 6.28"/>
+    <position name="act_left_elbow" joint="left_elbow_joint" kp="2200" kv="160" ctrlrange="-3.14 3.14"/>
+    <position name="act_left_wrist_1" joint="left_wrist_1_joint" kp="600" kv="60" ctrlrange="-6.28 6.28"/>
+    <position name="act_left_wrist_2" joint="left_wrist_2_joint" kp="600" kv="60" ctrlrange="-6.28 6.28"/>
+    <position name="act_left_wrist_3" joint="left_wrist_3_joint" kp="600" kv="60" ctrlrange="-6.28 6.28"/>
+    <!-- Right arm actuators (6) -->
+    <position name="act_right_shoulder_pan" joint="right_shoulder_pan_joint" kp="2600" kv="190" ctrlrange="-6.28 6.28"/>
+    <position name="act_right_shoulder_lift" joint="right_shoulder_lift_joint" kp="2600" kv="190" ctrlrange="-6.28 6.28"/>
+    <position name="act_right_elbow" joint="right_elbow_joint" kp="2200" kv="160" ctrlrange="-3.14 3.14"/>
+    <position name="act_right_wrist_1" joint="right_wrist_1_joint" kp="600" kv="60" ctrlrange="-6.28 6.28"/>
+    <position name="act_right_wrist_2" joint="right_wrist_2_joint" kp="600" kv="60" ctrlrange="-6.28 6.28"/>
+    <position name="act_right_wrist_3" joint="right_wrist_3_joint" kp="600" kv="60" ctrlrange="-6.28 6.28"/>
+  </actuator>
+  <keyframe>
+    <!--
+      Viewer-friendly working pose.
+
+      qpos order follows joint order:
+        base_x, base_y, base_yaw, base_z, left arm(6), right arm(6)
+
+      ctrl order follows actuator order:
+        base_x, base_y, base_z, base_yaw, left arm(6), right arm(6)
+    -->
+    <key name="home" qpos="0 0 0 0.2  0 -1.2 1.6 -0.4 -1.5708 0  0 -1.2 1.6 -0.4 -1.5708 0" ctrl="0 0 0.2 0  0 -1.2 1.6 -0.4 -1.5708 0  0 -1.2 1.6 -0.4 -1.5708 0"/>
+  </keyframe>
+</mujoco>

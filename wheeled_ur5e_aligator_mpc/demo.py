@@ -3,6 +3,7 @@ Main MPC demo loop for wheeled UR5e.
 Used by scripts/run_demo.py.
 """
 
+import gc
 import time
 from pathlib import Path
 
@@ -126,9 +127,8 @@ def run_demo(
     # Save logs and generate plots
     npz_path = logger.save("latest.npz")
     plot_paths = logger.plot("latest")
-    env.close()
 
-    # Print summary
+    # Print summary before cleanup (still have access to all objects)
     stats = logger.summary()
     print()
     print("===== Demo Summary =====")
@@ -147,3 +147,15 @@ def run_demo(
     print(f"Figures saved to:")
     for p in plot_paths:
         print(f"  {p}")
+
+    # --- Explicit cleanup to avoid segfault on interpreter shutdown ---
+    # C++ objects from ALIGATOR, MuJoCo, and Pinocchio must be destroyed in a
+    # controlled order before Python's GC tears them down non-deterministically.
+    # Without this, the process often segfaults after main() returns (all work
+    # is already done — logs, plots, summary — but the exit code is non-zero).
+    env.close()
+    mpc.close()
+    del mpc
+    del env
+    del robot
+    gc.collect()

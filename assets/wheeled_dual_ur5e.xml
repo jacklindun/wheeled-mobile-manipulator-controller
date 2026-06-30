@@ -1,0 +1,222 @@
+<!-- Wheeled Dual UR5e: 4-DoF virtual mobile base + 2×UR5e 6-DOF arms = 16-DOF system.
+
+     Base DOFs: base_x, base_y, base_z, base_yaw (4)
+     Left arm: left_shoulder_pan, left_shoulder_lift, left_elbow,
+               left_wrist_1, left_wrist_2, left_wrist_3 (6)
+     Right arm: right_shoulder_pan, right_shoulder_lift, right_elbow,
+                right_wrist_1, right_wrist_2, right_wrist_3 (6)
+
+     Total: 16 DOF
+
+     Left arm mounted at: y = +0.3m
+     Right arm mounted at: y = -0.3m
+-->
+<mujoco model="wheeled_dual_ur5e">
+  <compiler angle="radian" autolimits="true"/>
+
+  <option timestep="0.002" integrator="implicitfast" gravity="0 0 -9.81"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="120" elevation="-20"/>
+    <quality shadowsize="4096"/>
+    <map force="0.1" zfar="30"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0"
+             width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge"
+             rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" markrgb="0.8 0.8 0.8"
+             width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true"
+              texrepeat="5 5" reflectance="0.2"/>
+  </asset>
+
+  <default>
+    <joint limited="true"/>
+    <geom contype="1" conaffinity="1" condim="3" solref="0.008 1"/>
+    <position kp="400" kv="40" ctrllimited="true"/>
+  </default>
+
+  <worldbody>
+
+    <!-- Scene lighting and ground -->
+    <light pos="0 0 3.5" dir="0 0 -1" directional="true"
+           diffuse="0.4 0.4 0.4" specular="0.1 0.1 0.1"/>
+    <light pos="1.5 1.5 2.5" dir="-1 -1 -1.5" diffuse="0.5 0.5 0.5"/>
+    <geom name="floor" type="plane" size="0 0 0.05" pos="0 0 0"
+          material="groundplane"/>
+
+    <!-- Target markers for left and right EE -->
+    <body name="left_target_body" mocap="true" pos="0.62 0.3 0.86">
+      <site name="left_target_site" type="sphere" size="0.020" rgba="0 1 0 0.8"/>
+    </body>
+
+    <body name="right_target_body" mocap="true" pos="0.62 -0.3 0.86">
+      <site name="right_target_site" type="sphere" size="0.020" rgba="0 1 1 0.8"/>
+    </body>
+
+    <!-- Virtual mobile base -->
+    <body name="base_x_body" pos="0 0 0">
+      <inertial pos="0 0 0" mass="2.0" diaginertia="0.1 0.1 0.1"/>
+      <joint name="base_x" type="slide" axis="1 0 0" range="-3.0 3.0" damping="10.0"/>
+
+      <body name="base_y_body">
+        <inertial pos="0 0 0" mass="2.0" diaginertia="0.1 0.1 0.1"/>
+        <joint name="base_y" type="slide" axis="0 1 0" range="-3.0 3.0" damping="10.0"/>
+
+        <body name="base_yaw_body">
+          <inertial pos="0 0 0" mass="2.0" diaginertia="0.1 0.1 0.1"/>
+          <joint name="base_yaw" type="hinge" axis="0 0 1" range="-3.1416 3.1416" damping="5.0"/>
+
+          <!-- Chassis (wider to accommodate two arms) -->
+          <body name="chassis" pos="0 0 0.14">
+            <geom type="box" size="0.35 0.35 0.05" pos="0 0 0" rgba="0.2 0.2 0.7 1" mass="30.0"/>
+
+            <!-- Four wheels -->
+            <geom type="cylinder" size="0.1 0.04" pos=" 0.25  0.30 -0.04"
+                  euler="1.5708 0 0" rgba="0.1 0.1 0.1 1" mass="1.0"/>
+            <geom type="cylinder" size="0.1 0.04" pos=" 0.25 -0.30 -0.04"
+                  euler="1.5708 0 0" rgba="0.1 0.1 0.1 1" mass="1.0"/>
+            <geom type="cylinder" size="0.1 0.04" pos="-0.25  0.30 -0.04"
+                  euler="1.5708 0 0" rgba="0.1 0.1 0.1 1" mass="1.0"/>
+            <geom type="cylinder" size="0.1 0.04" pos="-0.25 -0.30 -0.04"
+                  euler="1.5708 0 0" rgba="0.1 0.1 0.1 1" mass="1.0"/>
+          </body>
+
+          <!-- Lift stage -->
+          <body name="base_z_body" pos="0 0 0">
+            <inertial pos="0 0 0.1" mass="3.0" diaginertia="0.1 0.1 0.1"/>
+            <joint name="base_z" type="slide" axis="0 0 1" range="0.0 0.5" damping="10.0"/>
+
+            <!-- Lift column -->
+            <geom type="cylinder" size="0.05 0.135" pos="0 0 0.135"
+                  rgba="0.5 0.5 0.5 1" mass="3.0"/>
+
+            <!-- LEFT ARM: mounted at y=+0.3m -->
+            <body name="left_shoulder_link" pos="0 0.3 0.27">
+              <inertial pos="0 0 0" mass="3.761" diaginertia="0.01 0.01 0.01"/>
+              <joint name="left_shoulder_pan_joint" type="hinge" axis="0 0 1"
+                     range="-6.2832 6.2832" damping="1.0" armature="0.1"/>
+              <geom type="cylinder" size="0.06 0.06" rgba="0 0.8 0 1"/>
+              <geom type="capsule" fromto="0 0 0 0 0.1358 0" size="0.05" rgba="0 0.8 0 1"/>
+
+              <body name="left_upper_arm_link" pos="0 0.1358 0">
+                <inertial pos="-0.2125 0 0" mass="8.058" diaginertia="0.2 0.2 0.01"/>
+                <joint name="left_shoulder_lift_joint" type="hinge" axis="0 1 0"
+                       range="-6.2832 6.2832" damping="1.0" armature="0.1"/>
+                <geom type="capsule" fromto="0 0 0 -0.425 0 0" size="0.04" rgba="0 0.9 0 1"/>
+
+                <body name="left_forearm_link" pos="-0.425 0 0">
+                  <inertial pos="-0.1961 0 0.067" mass="2.846" diaginertia="0.05 0.05 0.01"/>
+                  <joint name="left_elbow_joint" type="hinge" axis="0 1 0"
+                         range="-3.1416 3.1416" damping="0.5" armature="0.1"/>
+                  <geom type="capsule" fromto="0 0 0 -0.3922 0 0" size="0.035" rgba="0 1 0 1"/>
+                  <geom type="capsule" fromto="-0.3922 0 0 -0.3922 0 0.1333" size="0.033" rgba="0 1 0 1"/>
+
+                  <body name="left_wrist_1_link" pos="-0.3922 0 0.1333">
+                    <inertial pos="0 -0.05 0" mass="1.37" diaginertia="0.005 0.005 0.005"/>
+                    <joint name="left_wrist_1_joint" type="hinge" axis="0 1 0"
+                           range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+                    <geom type="cylinder" size="0.032 0.035" rgba="0.2 0.8 0.2 1"/>
+
+                    <body name="left_wrist_2_link" pos="0 -0.0997 0">
+                      <inertial pos="0 0 0.05" mass="1.37" diaginertia="0.005 0.005 0.005"/>
+                      <joint name="left_wrist_2_joint" type="hinge" axis="0 0 1"
+                             range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+                      <geom type="cylinder" size="0.032 0.035" rgba="0.2 0.8 0.2 1"/>
+
+                      <body name="left_wrist_3_link" pos="0 0 0.0996">
+                        <inertial pos="0 -0.05 0" mass="0.195" diaginertia="0.001 0.001 0.001"/>
+                        <joint name="left_wrist_3_joint" type="hinge" axis="0 1 0"
+                               range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+                        <geom type="cylinder" size="0.03 0.02" rgba="0.3 0.9 0.3 1"/>
+                        <site name="left_ee_site" pos="0 -0.0996 0" size="0.020" rgba="0 1 0 1" type="sphere"/>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+
+            <!-- RIGHT ARM: mounted at y=-0.3m -->
+            <body name="right_shoulder_link" pos="0 -0.3 0.27">
+              <inertial pos="0 0 0" mass="3.761" diaginertia="0.01 0.01 0.01"/>
+              <joint name="right_shoulder_pan_joint" type="hinge" axis="0 0 1"
+                     range="-6.2832 6.2832" damping="1.0" armature="0.1"/>
+              <geom type="cylinder" size="0.06 0.06" rgba="0 0.5 1 1"/>
+              <geom type="capsule" fromto="0 0 0 0 -0.1358 0" size="0.05" rgba="0 0.5 1 1"/>
+
+              <body name="right_upper_arm_link" pos="0 -0.1358 0">
+                <inertial pos="-0.2125 0 0" mass="8.058" diaginertia="0.2 0.2 0.01"/>
+                <joint name="right_shoulder_lift_joint" type="hinge" axis="0 1 0"
+                       range="-6.2832 6.2832" damping="1.0" armature="0.1"/>
+                <geom type="capsule" fromto="0 0 0 -0.425 0 0" size="0.04" rgba="0 0.6 1 1"/>
+
+                <body name="right_forearm_link" pos="-0.425 0 0">
+                  <inertial pos="-0.1961 0 0.067" mass="2.846" diaginertia="0.05 0.05 0.01"/>
+                  <joint name="right_elbow_joint" type="hinge" axis="0 1 0"
+                         range="-3.1416 3.1416" damping="0.5" armature="0.1"/>
+                  <geom type="capsule" fromto="0 0 0 -0.3922 0 0" size="0.035" rgba="0 0.7 1 1"/>
+                  <geom type="capsule" fromto="-0.3922 0 0 -0.3922 0 0.1333" size="0.033" rgba="0 0.7 1 1"/>
+
+                  <body name="right_wrist_1_link" pos="-0.3922 0 0.1333">
+                    <inertial pos="0 0.05 0" mass="1.37" diaginertia="0.005 0.005 0.005"/>
+                    <joint name="right_wrist_1_joint" type="hinge" axis="0 1 0"
+                           range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+                    <geom type="cylinder" size="0.032 0.035" rgba="0.2 0.6 1 1"/>
+
+                    <body name="right_wrist_2_link" pos="0 0.0997 0">
+                      <inertial pos="0 0 0.05" mass="1.37" diaginertia="0.005 0.005 0.005"/>
+                      <joint name="right_wrist_2_joint" type="hinge" axis="0 0 1"
+                             range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+                      <geom type="cylinder" size="0.032 0.035" rgba="0.2 0.6 1 1"/>
+
+                      <body name="right_wrist_3_link" pos="0 0 0.0996">
+                        <inertial pos="0 0.05 0" mass="0.195" diaginertia="0.001 0.001 0.001"/>
+                        <joint name="right_wrist_3_joint" type="hinge" axis="0 1 0"
+                               range="-6.2832 6.2832" damping="0.1" armature="0.01"/>
+                        <geom type="cylinder" size="0.03 0.02" rgba="0.3 0.7 1 1"/>
+                        <site name="right_ee_site" pos="0 0.0996 0" size="0.020" rgba="0 1 1 1" type="sphere"/>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+
+          </body>
+        </body>
+      </body>
+    </body>
+
+  </worldbody>
+
+  <!-- Position actuators for all 16 DOFs -->
+  <actuator>
+    <!-- Base actuators (4) -->
+    <position name="act_base_x" joint="base_x" kp="2000" kv="200" ctrlrange="-3.0 3.0"/>
+    <position name="act_base_y" joint="base_y" kp="2000" kv="200" ctrlrange="-3.0 3.0"/>
+    <position name="act_base_z" joint="base_z" kp="35000" kv="800" ctrlrange="0.0 0.5"/>
+    <position name="act_base_yaw" joint="base_yaw" kp="2000" kv="200" ctrlrange="-3.1416 3.1416"/>
+
+    <!-- Left arm actuators (6) -->
+    <position name="act_left_shoulder_pan" joint="left_shoulder_pan_joint" kp="2000" kv="200" ctrlrange="-6.28 6.28"/>
+    <position name="act_left_shoulder_lift" joint="left_shoulder_lift_joint" kp="2000" kv="200" ctrlrange="-6.28 6.28"/>
+    <position name="act_left_elbow" joint="left_elbow_joint" kp="2000" kv="200" ctrlrange="-3.14 3.14"/>
+    <position name="act_left_wrist_1" joint="left_wrist_1_joint" kp="500" kv="50" ctrlrange="-6.28 6.28"/>
+    <position name="act_left_wrist_2" joint="left_wrist_2_joint" kp="500" kv="50" ctrlrange="-6.28 6.28"/>
+    <position name="act_left_wrist_3" joint="left_wrist_3_joint" kp="500" kv="50" ctrlrange="-6.28 6.28"/>
+
+    <!-- Right arm actuators (6) -->
+    <position name="act_right_shoulder_pan" joint="right_shoulder_pan_joint" kp="2000" kv="200" ctrlrange="-6.28 6.28"/>
+    <position name="act_right_shoulder_lift" joint="right_shoulder_lift_joint" kp="2000" kv="200" ctrlrange="-6.28 6.28"/>
+    <position name="act_right_elbow" joint="right_elbow_joint" kp="2000" kv="200" ctrlrange="-3.14 3.14"/>
+    <position name="act_right_wrist_1" joint="right_wrist_1_joint" kp="500" kv="50" ctrlrange="-6.28 6.28"/>
+    <position name="act_right_wrist_2" joint="right_wrist_2_joint" kp="500" kv="50" ctrlrange="-6.28 6.28"/>
+    <position name="act_right_wrist_3" joint="right_wrist_3_joint" kp="500" kv="50" ctrlrange="-6.28 6.28"/>
+  </actuator>
+
+</mujoco>
